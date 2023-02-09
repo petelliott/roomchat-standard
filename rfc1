@@ -1,0 +1,82 @@
+Title:   the roomchat protocol
+Authors: peter
+Date:    feb 8, 2023
+Status:  draft
+
+1.1 Introduction
+================
+
+roomchat's goal is to provide a peer to peer chat protocol primarily for local
+area networking. roomchat provides a single chatroom with history for all
+users. users may send messages, receive them in real time, and view older
+messages, even from when they were offline. the scope of this rfc discusses
+peering, and simple text-only messages.
+
+2.1 The Network
+===============
+
+each peer in the network may act as a client, server, or both. connections may
+be initiated over any connection-based protocol, but TCP is the most common. if
+TCP is used the standard port is 41005. peers originate, forward, and catch up
+other peers connected to them, whether or not they are client or server.
+
+3.1 Protocol
+============
+
+all messages have a standard header, followed by a block of opcode specific
+data.
+
+all integer values are sent in network (big endian) byte order.
+
+3.2 Header Format
+
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|           opcode              |             nonce             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                            length                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          timestamp                            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       timestamp cont'd                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+3.3 Description of header fields
+
+opcode:    the message type see section 3.5 for details.
+nonce:     a random 16-bit value. used in conjunction with timestamp to
+           identify the message.
+timestamp: a 64-bit millisecond-accurate unix timestamp of when the message was
+           sent.
+
+3.4 Opcode Allocation
+
+opcodes 0x0-0x4000 are reserved for current and future standardization.
+opcodes 0x4000-0xffff are availible for reservation in 32 op blocks for
+extensions, leaving 1536 possible registrations.
+
+3.5 Standard Operations
+
+3.5.1 0x0 -- SND
+
+originate a message. a peer will send the message to all it's connections. the
+body is a null-terminated nick followed by a null terminated ascii message.
+timestamp should be the time that the user sends the message.
+
+3.5.1 0x1 -- RLY
+
+relay a live message. when a node receives an SND or RLY message, if it has not
+previously seen the message (determined by message id), it will resend the
+exact message with opcode RLY.
+
+3.5.2 0x2 -- SYNC
+
+request updates. nonce is unused, length = 0. the recieving node will send all
+messages since that timestamp as SUNC messages.
+
+3.5.3 0x3 -- SUNC
+
+a single message in reply to a SYNC. SUNC messages are not relayed. normally a
+node will send one SUNC message on startup, and will queue recived SYNC
+messages until it has SUNC.
